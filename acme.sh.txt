@@ -1,0 +1,119 @@
+1 安装
+安装很简单， 一个命令： curl https://get.acme.sh | sh
+会安装在 ~/.acme.sh/ 目录下，以后生成的证书也会在这里面，按照域名为文件夹安置。
+理论上会自动添加一个 acme.sh 别名，但有时候并不会生成，需要手动执行以下命令：source ~/.bashrc
+
+安装过程中会自动为你创建 cronjob, 每天 0:00 点自动检测所有的证书, 如果快过期了, 需要更新, 则会自动更新证书(HTTP方式支持)。
+19 0 * * * "/root/.acme.sh"/acme.sh --cron --home "/root/.acme.sh" > /dev/null
+
+手动升级：	  acme.sh --upgrade
+开启自动升级：acme.sh --upgrade --auto-upgrade
+关闭自动升级: acme.sh --upgrade --auto-upgrade 0
+
+2 DNS手动模式
+2.1 使用dns模式获取TXT
+首次：acme.sh --issue -d mcotw.dynv6.net --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please
+续签：acme.sh --renew --force -d 'mcotw.dynv6.net' --yes-I-know-dns-manual-mode-enough-go-ahead-please
+
+！！！如果超期了按首次处理，注意需要原来的目录
+
+2.2 在DNS服务器增加TXT记录
+根据第1步回显的信息在DNS服务器上增加对应域名的TXT记录
+[2020年 07月 15日 星期四 08:26:20 CST] Domain: '_acme-challenge.mcotw.dynv6.net'
+[2020年 07月 15日 星期四 08:26:20 CST] TXT value: 'cocVsMTh0TdV3IXdHx0JxFNh5Lm8Zc4c2v8hez4Z0No'
+
+可以通过命令nslookup -q=TXT _acme-challenge.mcotw.dynv6.net查询DNS修改记录是否生效，生效后开始第3步
+
+2.3、认证DNS并生成证书
+acme.sh --renew -d 'mcotw.dynv6.net' --yes-I-know-dns-manual-mode-enough-go-ahead-please
+
+3、HTTP方式
+3.1 申请证书
+acme.sh --issue -d mcotw.dynv6.net --webroot /home/wwwroot/default
+只需要指定域名, 并指定域名所在的网站根目录 acme.sh会全自动的生成验证文件, 并放到网站的根目录, 然后自动完成验证。最后会聪明的删除验证文件。整个过程没有任何副作用
+
+4 安装证书到指定位置
+acme.sh --install-cert -d mcotw.dynv6.net --key-file /home/wwwroot/cert/mcotw.key --fullchain-file /home/wwwroot/cert/mcotw.cer --reloadcmd "/etc/init.d/nginx restart"
+
+子域名需要单独申请：
+acme.sh --issue -d *.mcotw.dynv6.net --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please
+acme.sh --renew -d '*.mcotw.dynv6.net' --yes-I-know-dns-manual-mode-enough-go-ahead-please
+acme.sh --install-cert -d *.mcotw.dynv6.net --key-file /home/wwwroot/cert/*.mcotw.key --fullchain-file /home/wwwroot/cert/*.mcotw.cer --reloadcmd "/etc/init.d/nginx restart"
+
+
+google CA申请：
+1、 获取googleid
+Welcome to Cloud Shell! Type "help" to get started.
+Your Cloud Platform project in this session is set to reliable-plasma-259009.
+Use “gcloud config set project [PROJECT_ID]” to change to a different project.
+marscrazy@cloudshell:~ (reliable-plasma-259009)$ gcloud config set project reliable-plasma-259009
+Updated property [core/project].
+marscrazy@cloudshell:~ (reliable-plasma-259009)$ gcloud projects add-iam-policy-binding reliable-plasma-259009 \
+  --member=user:marscrazy@gmail.com \
+  --role=roles/publicca.externalAccountKeyCreator
+Updated IAM policy for project [reliable-plasma-259009].
+bindings:
+- members:
+  - user:marscrazy@gmail.com
+  role: roles/owner
+- members:
+  - user:marscrazy@gmail.com
+  role: roles/publicca.externalAccountKeyCreator
+etag: BwXekLT_15Q=
+version: 1
+marscrazy@cloudshell:~ (reliable-plasma-259009)$ gcloud alpha publicca external-account-keys create
+API [publicca.googleapis.com] not enabled on project [183772657616]. Would you like to enable and retry (this will take a few minutes)? (y/N)?  y
+
+Enabling service [publicca.googleapis.com] on project [183772657616]...
+Operation "operations/acat.p2-183772657616-4d67cf05-8e5d-409d-aa3b-ed26e53fa63b" finished successfully.
+Created an external account key
+[b64MacKey: sWTamUQb0UoPBwHHT_RMY_3GNPVQDNzuLQfX_FcNRHB6_-SKRz4Xe_ZAJhNXPC_kgkDH1DLLVpfdme3yg2WdOw
+keyId: 5555426a4af631b7aa74908dec92597d]
+
+2、设置acme参数
+~/.acme.sh/acme.sh --register-account -m marscrazy@gmail.com --server google \
+    --eab-kid 5555426a4af631b7aa74908dec92597d \
+    --eab-hmac-key sWTamUQb0UoPBwHHT_RMY_3GNPVQDNzuLQfX_FcNRHB6_-SKRz4Xe_ZAJhNXPC_kgkDH1DLLVpfdme3yg2WdOw
+[Mon May  9 17:32:39 CST 2022] Create account key ok.
+[Mon May  9 17:32:40 CST 2022] Registering account: https://dv.acme-v02.api.pki.goog/directory
+[Mon May  9 17:32:43 CST 2022] Registered
+[Mon May  9 17:32:43 CST 2022] ACCOUNT_THUMBPRINT='gw4CQQS-NlQRah0D_n_m_tE0mqme1dCpmI0w4kUFT7w'
+
+~/.acme.sh/acme.sh --set-default-ca --server google
+[Mon May  9 17:33:01 CST 2022] Changed default CA to: https://dv.acme-v02.api.pki.goog/directory
+
+3、申请证书
+~/.acme.sh/acme.sh --issue -d 'mcotw.dynv6.net' --dns --yes-I-know-dns-manual-mode-enough-go-ahead-please --days 90 -k ec-256
+~/.acme.sh/acme.sh --renew -d 'mcotw.dynv6.net' --yes-I-know-dns-manual-mode-enough-go-ahead-please
+     
+root@649182691woiden:~#
+[Mon May  9 17:36:58 CST 2022] The domain 'mcotw.dynv6.net' seems to have a ECC cert already, please add '--ecc' parameter if you want to use that cert.
+[Mon May  9 17:36:58 CST 2022] Renew: 'mcotw.dynv6.net'
+[Mon May  9 17:36:58 CST 2022] 'mcotw.dynv6.net' is not an issued domain, skip.
+root@649182691woiden:~# ~/.acme.sh/acme.sh --renew -d 'mcotw.dynv6.net' --yes-I-know-dns-manual-mode-enough-go-ahead-please --ecc
+[Mon May  9 17:37:26 CST 2022] Renew: 'mcotw.dynv6.net'
+[Mon May  9 17:37:27 CST 2022] Using CA: https://dv.acme-v02.api.pki.goog/directory
+[Mon May  9 17:37:27 CST 2022] Single domain='mcotw.dynv6.net'
+[Mon May  9 17:37:27 CST 2022] Getting domain auth token for each domain
+[Mon May  9 17:37:27 CST 2022] Verifying: mcotw.dynv6.net
+[Mon May  9 17:37:30 CST 2022] Processing, The CA is processing your order, please just wait. (1/30)
+[Mon May  9 17:37:34 CST 2022] Success
+[Mon May  9 17:37:34 CST 2022] Verify finished, start to sign.
+[Mon May  9 17:37:34 CST 2022] Lets finalize the order.
+[Mon May  9 17:37:34 CST 2022] Le_OrderFinalize='https://dv.acme-v02.api.pki.goog/order/BscmJl2BPZ8Dh1BStO6Ytg/finalize'
+[Mon May  9 17:37:37 CST 2022] Order status is processing, lets sleep and retry.
+[Mon May  9 17:37:40 CST 2022] Polling order status: https://dv.acme-v02.api.pki.goog/order/BscmJl2BPZ8Dh1BStO6Ytg
+[Mon May  9 17:37:42 CST 2022] Downloading cert.
+[Mon May  9 17:37:42 CST 2022] Le_LinkCert='https://dv.acme-v02.api.pki.goog/cert/4w_1Kpw8Qsy8thtW8bZakrNOKe1GW8CdxTeP2X-FqQQ'
+[Mon May  9 17:37:43 CST 2022] Cert success.
+-----BEGIN CERTIFICATE-----
+MIIEjDCCA3SgAwIBAgIQN2sfAeIdEfQRd9+YNfXvAzANBgkqhkiG9w0BAQsFADBG
+..........
+gD5CZPINYxGet5OrMIC9HAa+I2l5V6LvXDAtiK7Y+mCoPOBLz/ejiuQFda7Txh9A
+SCNbzx6nzeL9onaPOl4qKw==
+-----END CERTIFICATE-----
+[Mon May  9 17:37:43 CST 2022] Your cert is in: /root/.acme.sh/mcotw.dynv6.net_ecc/mcotw.dynv6.net.cer
+[Mon May  9 17:37:43 CST 2022] Your cert key is in: /root/.acme.sh/mcotw.dynv6.net_ecc/mcotw.dynv6.net.key
+[Mon May  9 17:37:43 CST 2022] The intermediate CA cert is in: /root/.acme.sh/mcotw.dynv6.net_ecc/ca.cer
+[Mon May  9 17:37:43 CST 2022] And the full chain certs is there: /root/.acme.sh/mcotw.dynv6.net_ecc/fullchain.cer
+
